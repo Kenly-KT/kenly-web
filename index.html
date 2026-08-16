@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>kenly — AI-guided codebase walkthroughs in your terminal</title>
+<meta name="description" content="Point kenly at any repo and it walks you through the code like a senior dev giving KT — opening files, highlighting the lines, explaining the flow, answering your questions live. Powered by Claude Code." />
+<style>
+  /* ── kenly design tokens (shared with the product's kenly-dark theme) ── */
+  :root {
+    --chrome: #181818;      /* deepest: page + chrome */
+    --editor: #1f1f1f;      /* surface: cards, terminal body */
+    --elevated: #252526;
+    --border: #2b2b2b;
+    --border-hi: #3c3c3c;
+    --fg: #e6e8ea;
+    --fg-muted: #9d9d9d;
+    --fg-dim: #6e7681;
+    --accent: #4ec98a;      /* kenly green */
+    --accent-dim: #367d59;
+    --blue: #4daafc;
+    /* syntax (VS Code Dark+) */
+    --k: #569cd6; --s: #ce9178; --c: #6a9955; --f: #dcdcaa;
+    --t: #4ec9b0; --n: #b5cea8; --v: #9cdcfe; --p: #c586c0;
+    --mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --maxw: 1080px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--sans);
+    background: var(--chrome);
+    color: var(--fg);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  ::selection { background: rgba(78,201,138,0.3); }
+
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+  /* ── nav ── */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(24,24,24,0.8);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-in { max-width: var(--maxw); margin: 0 auto; padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between; }
+  .brand { font-family: var(--mono); font-weight: 700; font-size: 18px; letter-spacing: -0.5px; }
+  .brand .dot { color: var(--accent); }
+  .nav-links { display: flex; gap: 28px; align-items: center; }
+  .nav-links a { color: var(--fg-muted); font-size: 14px; transition: color .15s; }
+  .nav-links a:hover { color: var(--fg); }
+  .nav-cta {
+    font-family: var(--mono); font-size: 13px;
+    background: var(--editor); border: 1px solid var(--border-hi);
+    color: var(--fg) !important; padding: 7px 14px; border-radius: 7px;
+    transition: border-color .15s;
+  }
+  .nav-cta:hover { border-color: var(--accent); }
+  @media (max-width: 680px) { .nav-links a:not(.nav-cta) { display: none; } }
+
+  /* ── hero ── */
+  .hero { padding: 88px 0 56px; text-align: center; position: relative; }
+  .hero::before {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(60% 50% at 50% 0%, rgba(78,201,138,0.10), transparent 70%);
+    pointer-events: none;
+  }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 12.5px; color: var(--accent);
+    border: 1px solid var(--accent-dim); border-radius: 999px;
+    padding: 5px 13px; margin-bottom: 26px;
+    background: rgba(78,201,138,0.06);
+  }
+  .eyebrow .pip { width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 8px var(--accent); }
+  h1 {
+    font-size: clamp(34px, 5.5vw, 60px); line-height: 1.05; letter-spacing: -1.5px;
+    font-weight: 800; max-width: 16ch; margin: 0 auto 22px; text-wrap: balance;
+  }
+  h1 .g { color: var(--accent); }
+  .sub {
+    font-size: clamp(16px, 2vw, 20px); color: var(--fg-muted);
+    max-width: 60ch; margin: 0 auto 34px; text-wrap: pretty;
+  }
+  .cta-row { display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap; }
+  .install {
+    display: inline-flex; align-items: center; gap: 12px;
+    font-family: var(--mono); font-size: 15px;
+    background: var(--editor); border: 1px solid var(--border-hi);
+    padding: 12px 16px; border-radius: 10px; color: var(--fg);
+    cursor: pointer; transition: border-color .15s;
+  }
+  .install:hover { border-color: var(--accent); }
+  .install .pmt { color: var(--accent); }
+  .install .copy { color: var(--fg-dim); font-size: 12px; border-left: 1px solid var(--border-hi);
+    padding-left: 12px; margin-left: 2px; }
+  .btn-ghost {
+    font-size: 15px; color: var(--fg-muted); padding: 12px 18px;
+    border: 1px solid var(--border); border-radius: 10px; transition: all .15s;
+  }
+  .btn-ghost:hover { color: var(--fg); border-color: var(--border-hi); }
+
+  /* ── terminal mock ── */
+  .term-shell {
+    margin: 54px auto 0; max-width: 960px;
+    background: var(--editor); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+    box-shadow: 0 30px 80px -20px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.02);
+  }
+  .term-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 11px 14px; background: var(--chrome); border-bottom: 1px solid var(--border);
+  }
+  .tl { width: 12px; height: 12px; border-radius: 50%; }
+  .tl.r { background: #ff5f56; } .tl.y { background: #ffbd2e; } .tl.g { background: #27c93f; }
+  .term-title { font-family: var(--mono); font-size: 12px; color: var(--fg-dim); margin-left: 10px; }
+  .term-title b { color: var(--fg-muted); font-weight: 600; }
+
+  .ide { display: grid; grid-template-columns: 172px 1fr 250px; min-height: 340px; font-family: var(--mono); font-size: 12.5px; }
+  .ide .tree { background: var(--chrome); border-right: 1px solid var(--border); padding: 10px 0; }
+  .ide .tree .hd { color: var(--fg-dim); font-size: 10.5px; letter-spacing: 1px; padding: 0 14px 8px; }
+  .ide .tree .row { padding: 2px 14px; color: var(--fg-muted); white-space: nowrap; }
+  .ide .tree .row.dir { color: #d7dae0; }
+  .ide .tree .row.open { color: var(--accent); }
+  .ide .tree .row.open::before { content: "● "; font-size: 9px; vertical-align: middle; }
+  .ide .code { background: var(--editor); padding: 10px 0; overflow: hidden; }
+  .ide .code .ln { display: flex; padding: 0 14px; white-space: pre; }
+  .ide .code .ln .no { color: #5a6069; width: 30px; text-align: right; margin-right: 16px; user-select: none; flex-shrink: 0; }
+  .ide .code .ln.hl { background: rgba(31,58,95,0.55); box-shadow: inset 3px 0 0 var(--blue); }
+  .ide .pane { background: var(--chrome); border-left: 1px solid var(--border); padding: 12px 14px; }
+  .ide .pane .st { font-size: 11px; color: var(--accent); margin-bottom: 12px; }
+  .ide .pane .st::before { content: "● "; }
+  .ide .pane p { font-family: var(--sans); font-size: 12.5px; color: var(--fg-muted); line-height: 1.55; margin-bottom: 10px; }
+  .ide .pane .tool { color: var(--fg-dim); font-size: 11px; }
+  .ide .pane .ask { margin-top: 14px; border: 1px solid var(--border-hi); border-radius: 8px;
+    padding: 7px 10px; color: var(--fg-dim); font-size: 11.5px; }
+  .kw{color:var(--k)} .str{color:var(--s)} .cm{color:var(--c)} .fn{color:var(--f)}
+  .ty{color:var(--t)} .nu{color:var(--n)} .va{color:var(--v)} .pu{color:var(--p)}
+  @media (max-width: 760px){ .ide{grid-template-columns:1fr} .ide .tree,.ide .pane{display:none} }
+
+  /* ── sections ── */
+  section { padding: 72px 0; }
+  .sec-label { font-family: var(--mono); font-size: 12.5px; color: var(--accent); margin-bottom: 12px; letter-spacing: 0.5px; }
+  h2 { font-size: clamp(26px, 3.6vw, 38px); letter-spacing: -0.8px; font-weight: 750; margin-bottom: 16px; max-width: 20ch; text-wrap: balance; }
+  .lead { color: var(--fg-muted); font-size: 17px; max-width: 60ch; text-wrap: pretty; }
+
+  /* problem → solution split */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 40px; }
+  @media (max-width: 760px){ .split{grid-template-columns:1fr} }
+  .qcard { background: var(--editor); border: 1px solid var(--border); border-radius: 12px; padding: 26px; }
+  .qcard.bad { opacity: 0.92; }
+  .qcard .tag { font-family: var(--mono); font-size: 12px; margin-bottom: 12px; }
+  .qcard.bad .tag { color: var(--fg-dim); }
+  .qcard.good .tag { color: var(--accent); }
+  .qcard h3 { font-size: 18px; margin-bottom: 8px; font-weight: 650; }
+  .qcard p { color: var(--fg-muted); font-size: 15px; }
+  .qcard.good { border-color: var(--accent-dim); }
+
+  /* how it works */
+  .steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 22px; margin-top: 44px; }
+  @media (max-width: 760px){ .steps{grid-template-columns:1fr} }
+  .step .num { font-family: var(--mono); font-size: 13px; color: var(--accent); margin-bottom: 12px; }
+  .step h3 { font-size: 17px; margin-bottom: 7px; font-weight: 650; }
+  .step p { color: var(--fg-muted); font-size: 14.5px; }
+  .step { border-top: 1px solid var(--border); padding-top: 18px; }
+
+  /* feature rows */
+  .feat { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; margin-top: 56px; }
+  .feat:nth-child(even) .feat-txt { order: 2; }
+  @media (max-width: 760px){ .feat{grid-template-columns:1fr; gap:20px} .feat:nth-child(even) .feat-txt{order:0} }
+  .feat h3 { font-size: 22px; margin-bottom: 12px; letter-spacing: -0.4px; }
+  .feat p { color: var(--fg-muted); font-size: 15.5px; }
+  .feat-visual { background: var(--editor); border: 1px solid var(--border); border-radius: 12px; padding: 20px; font-family: var(--mono); font-size: 12.5px; min-height: 180px; }
+  .chip { display:inline-block; font-family: var(--mono); font-size: 11px; color: var(--accent);
+    border: 1px solid var(--accent-dim); border-radius: 6px; padding: 3px 8px; margin: 0 6px 6px 0; }
+
+  /* two modes */
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 40px; }
+  @media (max-width: 760px){ .modes{grid-template-columns:1fr} }
+  .mode { background: var(--editor); border: 1px solid var(--border); border-radius: 12px; padding: 28px; }
+  .mode .cmd { font-family: var(--mono); font-size: 14px; color: var(--accent); margin-bottom: 14px; }
+  .mode .cmd .pmt { color: var(--fg-dim); }
+  .mode h3 { font-size: 19px; margin-bottom: 8px; }
+  .mode p { color: var(--fg-muted); font-size: 15px; margin-bottom: 14px; }
+  .mode ul { list-style: none; }
+  .mode li { color: var(--fg-muted); font-size: 14px; padding: 4px 0 4px 20px; position: relative; }
+  .mode li::before { content: "→"; position: absolute; left: 0; color: var(--accent); }
+
+  /* cta band */
+  .cta-band { text-align: center; padding: 88px 0; }
+  .cta-band h2 { margin: 0 auto 18px; }
+  .cta-band .sub { margin-bottom: 30px; }
+
+  footer { border-top: 1px solid var(--border); padding: 36px 0; }
+  .foot-in { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+  .foot-in .brand { font-size: 16px; }
+  .foot-links { display: flex; gap: 22px; }
+  .foot-links a { color: var(--fg-dim); font-size: 14px; transition: color .15s; }
+  .foot-links a:hover { color: var(--fg); }
+  .foot-note { color: var(--fg-dim); font-size: 13px; margin-top: 20px; }
+
+  /* ── contact ── */
+  #contact { padding: 40px 0 88px; }
+  .contact-card {
+    background: var(--editor); border: 1px solid var(--border); border-radius: 16px;
+    padding: 44px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 40px; align-items: center;
+  }
+  .contact-card h2 { margin-bottom: 12px; }
+  .contact-actions { display: flex; flex-direction: column; gap: 12px; }
+  .contact-btn {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 15px 20px; border-radius: 10px; font-size: 15.5px; font-weight: 550;
+    border: 1px solid var(--border-hi); color: var(--fg); transition: all .15s;
+  }
+  .contact-btn .arw { color: var(--fg-dim); transition: color .15s; }
+  .contact-btn:hover { border-color: var(--fg-dim); }
+  .contact-btn:hover .arw { color: var(--fg); }
+  .contact-btn.primary { background: var(--accent); color: #10231a; border-color: var(--accent); }
+  .contact-btn.primary .arw { color: #10231a; }
+  .contact-btn.primary:hover { background: #5ad698; border-color: #5ad698; }
+  @media (max-width: 760px){ .contact-card{grid-template-columns:1fr; padding:30px} }
+
+  /* Reveal-on-scroll as PROGRESSIVE ENHANCEMENT only. Content is visible by
+     default; JS adds `.js` to <html> and only then do we hide-then-animate.
+     This guarantees nothing is ever stuck invisible if JS/observer misfires. */
+  .js .reveal { opacity: 0; transform: translateY(16px); transition: opacity .6s ease, transform .6s ease; }
+  .js .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce){ .js .reveal{opacity:1;transform:none;transition:none} html{scroll-behavior:auto} }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-in">
+    <div class="brand">kenly<span class="dot">.</span></div>
+    <div class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#modes">Modes</a>
+      <a href="https://pypi.org/project/kenly/" target="_blank">PyPI</a>
+      <a class="nav-cta" href="#contact">Get in touch</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow"><span class="pip"></span> Powered by Claude Code</div>
+    <h1>Get walked through <span class="g">any codebase</span>, right in your terminal</h1>
+    <p class="sub">kenly is a guided knowledge-transfer tool. Point it at a repo and it explains the code like a senior dev giving you KT — opening files, highlighting the exact lines, and answering your questions live.</p>
+    <div class="cta-row">
+      <div class="install" onclick="copyInstall(this)">
+        <span class="pmt">$</span> pip install kenly
+        <span class="copy">click to copy</span>
+      </div>
+      <a class="btn-ghost" href="#how">See how it works</a>
+    </div>
+
+    <!-- terminal mock -->
+    <div class="term-shell">
+      <div class="term-bar">
+        <span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
+        <span class="term-title"><b>kenly kt</b> — ~/projects/flask</span>
+      </div>
+      <div class="ide">
+        <div class="tree">
+          <div class="hd">&nbsp;EXPLORER</div>
+          <div class="row dir">› src</div>
+          <div class="row dir">&nbsp;&nbsp;› flask</div>
+          <div class="row">&nbsp;&nbsp;&nbsp;&nbsp;app.py</div>
+          <div class="row open">&nbsp;&nbsp;&nbsp;&nbsp;ctx.py</div>
+          <div class="row">&nbsp;&nbsp;&nbsp;&nbsp;blueprints.py</div>
+          <div class="row">&nbsp;&nbsp;&nbsp;&nbsp;wrappers.py</div>
+          <div class="row dir">› tests</div>
+          <div class="row">README.md</div>
+        </div>
+        <div class="code">
+          <div class="ln"><span class="no">405</span><span class="kw">def</span> <span class="fn">match_request</span>(<span class="va">self</span>) -> <span class="kw">None</span>:</div>
+          <div class="ln"><span class="no">406</span>    <span class="cm"># Can be overridden by a subclass to hook into the</span></div>
+          <div class="ln"><span class="no">407</span>    <span class="cm"># matching of the request.</span></div>
+          <div class="ln"><span class="no">408</span>    <span class="kw">try</span>:</div>
+          <div class="ln hl"><span class="no">409</span>        <span class="va">result</span> = <span class="va">self</span>.<span class="va">url_adapter</span>.<span class="fn">match</span>(<span class="va">return_rule</span>=<span class="kw">True</span>)</div>
+          <div class="ln hl"><span class="no">410</span>        <span class="va">self</span>.<span class="va">request</span>.<span class="va">url_rule</span>, <span class="va">self</span>.<span class="va">request</span>.<span class="va">view_args</span> = <span class="va">result</span></div>
+          <div class="ln hl"><span class="no">411</span>    <span class="kw">except</span> <span class="ty">HTTPException</span> <span class="kw">as</span> <span class="va">e</span>:</div>
+          <div class="ln hl"><span class="no">412</span>        <span class="va">self</span>.<span class="va">request</span>.<span class="va">routing_exception</span> = <span class="va">e</span></div>
+          <div class="ln"><span class="no">413</span></div>
+          <div class="ln"><span class="no">414</span>    <span class="kw">def</span> <span class="fn">match_request</span>(<span class="va">self</span>):</div>
+        </div>
+        <div class="pane">
+          <div class="st">3/6 · request routing</div>
+          <p>Here's where a URL becomes a view. <span style="color:var(--fg)">match_request</span> asks the URL adapter to resolve the path against the registered routes…</p>
+          <p style="color:var(--fg-dim);font-size:11.5px">…and stashes the matched rule on the request so the dispatcher can call the right view next.</p>
+          <div class="tool">▸ opened src/flask/ctx.py</div>
+          <div class="tool">▸ highlighted ctx.py:409–412</div>
+          <div class="ask">Ask anything, even mid-sentence …</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- PROBLEM → SOLUTION -->
+<section>
+  <div class="wrap">
+    <div class="sec-label reveal">THE PROBLEM</div>
+    <h2 class="reveal">Onboarding onto an unfamiliar codebase is slow and lonely.</h2>
+    <p class="lead reveal">A README tells you <em>what</em> the project does. A chat assistant answers a question — then leaves you hunting through files for where the answer actually lives. Neither one walks you through the code.</p>
+    <div class="split">
+      <div class="qcard bad reveal">
+        <div class="tag">// a doc or a chatbot</div>
+        <h3>Tells you about the code</h3>
+        <p>Prose and answers in a separate window. You still have to find the files, trace the flow, and hold the map in your head.</p>
+      </div>
+      <div class="qcard good reveal">
+        <div class="tag">// kenly</div>
+        <h3>Shows you the code, live</h3>
+        <p>It drives your screen while it explains — opening the right file, highlighting the exact lines, moving in execution order. You watch the flow instead of reconstructing it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="wrap">
+    <div class="sec-label reveal">HOW IT WORKS</div>
+    <h2 class="reveal">A senior-dev walkthrough, on demand.</h2>
+    <div class="steps">
+      <div class="step reveal">
+        <div class="num">01</div>
+        <h3>Point it at a repo</h3>
+        <p><code style="font-family:var(--mono);color:var(--accent)">kenly kt ./project</code> — kenly reads the repo, finds the real entry point, and plans a route through it.</p>
+      </div>
+      <div class="step reveal">
+        <div class="num">02</div>
+        <h3>It drives the screen</h3>
+        <p>File by file, in execution order, it opens and highlights the lines that matter while narrating what they do and why.</p>
+      </div>
+      <div class="step reveal">
+        <div class="num">03</div>
+        <h3>You interrupt anytime</h3>
+        <p>Ask a question mid-sentence, go deeper, skip ahead, or grab the wheel and explore — then resume where you left off.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section>
+  <div class="wrap">
+    <div class="feat">
+      <div class="feat-txt reveal">
+        <h3>It points at the code, not just filenames</h3>
+        <p>Every explanation is anchored to the actual lines on screen — opened, highlighted, and scrolled to. No more “it’s somewhere in the auth module.”</p>
+      </div>
+      <div class="feat-visual reveal">
+        <div style="color:var(--fg-dim)">▸ open_tree_to <span style="color:var(--va)">src/flask/app.py</span></div>
+        <div style="color:var(--fg-dim)">▸ open_file <span style="color:var(--va)">src/flask/app.py</span></div>
+        <div style="color:var(--fg-dim)">▸ highlight <span style="color:var(--va)">app.py:1289–1301</span></div>
+        <div style="color:var(--fg-dim)">▸ focus_line <span style="color:var(--va)">1289</span></div>
+        <div style="margin-top:14px;color:var(--accent)">● talking · 2/6 · WSGI entry</div>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-txt reveal">
+        <h3>Interruptible by design</h3>
+        <p>It works like a real handover: one idea, then it stops and waits. Cut in with a question, tell it to go deeper, or take over and browse — it adapts and picks the thread back up.</p>
+      </div>
+      <div class="feat-visual reveal">
+        <span class="chip">^J ask</span><span class="chip">^N next</span><span class="chip">^G deeper</span><span class="chip">^S skip</span><span class="chip">^E explore</span><span class="chip">^R resume</span>
+        <p style="font-family:var(--sans);color:var(--fg-muted);font-size:13.5px;margin-top:14px">Your question is answered in the context of exactly what’s on screen.</p>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-txt reveal">
+        <h3>Your auth, your choice — and cost-safe</h3>
+        <p>Use your Claude Code subscription <em>or</em> an API key; kenly obeys your choice and never quietly bills the wrong one. A real spend cap stops a session before it runs away, and an offline demo costs nothing.</p>
+      </div>
+      <div class="feat-visual reveal">
+        <div style="color:var(--fg-dim)">$ kenly kt . <span style="color:var(--accent)">--auth subscription</span></div>
+        <div style="color:var(--fg-dim)">$ kenly kt . <span style="color:var(--accent)">--max-cost 2</span></div>
+        <div style="color:var(--fg-dim)">$ kenly kt . <span style="color:var(--accent)">--offline</span> <span class="cm" style="color:var(--c)"># free demo</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TWO MODES -->
+<section id="modes">
+  <div class="wrap">
+    <div class="sec-label reveal">TWO WAYS TO USE IT</div>
+    <h2 class="reveal">A guided tour, or a fast explorer.</h2>
+    <div class="modes">
+      <div class="mode reveal">
+        <div class="cmd"><span class="pmt">$</span> kenly kt ./repo</div>
+        <h3>The AI walkthrough</h3>
+        <p>The reason to reach for kenly. A live, narrated tour that drives the UI and answers questions.</p>
+        <ul>
+          <li>Explains the real execution flow</li>
+          <li>Opens &amp; highlights as it talks</li>
+          <li>Interruptible, explorable, resumable</li>
+        </ul>
+      </div>
+      <div class="mode reveal">
+        <div class="cmd"><span class="pmt">$</span> kenly ./repo</div>
+        <h3>The read-only explorer</h3>
+        <p>The fast terminal code viewer the AI drives — also great on its own.</p>
+        <ul>
+          <li>File tree, tabs, syntax highlighting</li>
+          <li>Fuzzy finder, in-file search, jump-to-line</li>
+          <li>No AI, no network — just browse</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-band">
+  <div class="wrap">
+    <div class="sec-label reveal" style="text-align:center">GET STARTED</div>
+    <h2 class="reveal">Your next codebase, explained.</h2>
+    <p class="sub reveal">Install it and point it at any repo. Bring your Claude Code login or an API key.</p>
+    <div class="cta-row reveal">
+      <div class="install" onclick="copyInstall(this)">
+        <span class="pmt">$</span> pip install kenly
+        <span class="copy">click to copy</span>
+      </div>
+      <a class="btn-ghost" href="https://pypi.org/project/kenly/" target="_blank">View on PyPI</a>
+    </div>
+    <p class="foot-note reveal">Needs Python 3.11+ · the Claude Code CLI · a Claude subscription or API key</p>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<section id="contact">
+  <div class="wrap">
+    <div class="contact-card reveal">
+      <div>
+        <div class="sec-label">CONTACT</div>
+        <h2>Questions, feedback, or a walkthrough?</h2>
+        <p class="lead">kenly is built by Vishesh Paliwal. Book a quick call or drop a line — happy to help you get started or hear what you think.</p>
+      </div>
+      <div class="contact-actions">
+        <a class="contact-btn primary" href="https://cal.com/vishesh-paliwal/30min" target="_blank">
+          <span>Schedule a call</span><span class="arw">↗</span>
+        </a>
+        <a class="contact-btn" href="mailto:visheshpaliwal777@gmail.com">
+          <span>Say hi by email</span><span class="arw">↗</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-in">
+      <div class="brand">kenly<span class="dot">.</span></div>
+      <div class="foot-links">
+        <a href="https://pypi.org/project/kenly/" target="_blank">PyPI</a>
+        <a href="https://cal.com/vishesh-paliwal/30min" target="_blank">Schedule a call</a>
+        <a href="mailto:visheshpaliwal777@gmail.com">Email</a>
+      </div>
+    </div>
+    <p class="foot-note">kenly · a guided read of any codebase · MIT licensed</p>
+  </div>
+</footer>
+
+<script>
+  function copyInstall(el){
+    navigator.clipboard && navigator.clipboard.writeText("pip install kenly");
+    const c = el.querySelector(".copy");
+    const old = c.textContent; c.textContent = "copied ✓"; c.style.color = "var(--accent)";
+    setTimeout(()=>{ c.textContent = old; c.style.color = ""; }, 1400);
+  }
+  // Enable reveal animations only when JS runs (progressive enhancement).
+  document.documentElement.classList.add("js");
+  const io = new IntersectionObserver((es)=>{
+    es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); } });
+  }, { threshold: 0.08, rootMargin: "0px 0px -5% 0px" });
+  const items = document.querySelectorAll(".reveal");
+  items.forEach(el=>io.observe(el));
+  // Fail-safe: guarantee everything ends visible even if the observer misfires
+  // (headless capture, old browsers). Below-fold items still animate on scroll;
+  // anything not yet revealed a moment after load is simply shown.
+  window.addEventListener("load", ()=> setTimeout(()=>{
+    items.forEach(el=>el.classList.add("in"));
+  }, 1200));
+</script>
+</body>
+</html>
