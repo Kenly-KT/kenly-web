@@ -523,12 +523,7 @@
     items.forEach(el=>el.classList.add("in"));
   }, 1200));
 </script>
-<!-- Vercel Web Analytics (static site). The script is served by Vercel at
-     /_vercel/insights/script.js once Analytics is enabled for the project in
-     the dashboard. No-op locally / off-Vercel, so it's safe to keep in the file. -->
-<script>
-  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-</script>
-<script defer src="/_vercel/insights/script.js"></script>
+<!-- Vercel Web Analytics using @vercel/analytics package -->
+<script type="module" src="/analytics.js"></script>
 </body>
 </html>
