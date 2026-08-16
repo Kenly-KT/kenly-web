@@ -5,6 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>kenly — AI-guided codebase walkthroughs in your terminal</title>
 <meta name="description" content="Point kenly at any repo and it walks you through the code like a senior dev giving KT — opening files, highlighting the lines, explaining the flow, answering your questions live. Powered by Claude Code." />
+
+<!-- favicons / icons -->
+<link rel="icon" href="/assets/favicon.ico" sizes="any" />
+<link rel="icon" type="image/svg+xml" href="/assets/kenly-icon-dark.svg" />
+<link rel="apple-touch-icon" href="/assets/kenly-icon-180.png" />
+<link rel="mask-icon" href="/assets/kenly-mark-transparent.svg" color="#4ec98a" />
+<meta name="theme-color" content="#181818" />
+
+<!-- social / open graph -->
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://kenly.tech/" />
+<meta property="og:title" content="kenly — AI-guided codebase walkthroughs in your terminal" />
+<meta property="og:description" content="Point kenly at any repo and it walks you through the code like a senior dev giving KT — opening files, highlighting the lines, explaining the flow, answering questions live." />
+<meta property="og:image" content="https://kenly.tech/assets/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="kenly — AI-guided codebase walkthroughs in your terminal" />
+<meta name="twitter:description" content="Get walked through any codebase, right in your terminal. Powered by Claude Code." />
+<meta name="twitter:image" content="https://kenly.tech/assets/og-image.png" />
 <style>
   /* ── kenly design tokens (shared with the product's kenly-dark theme) ── */
   :root {
@@ -51,7 +71,8 @@
   }
   .nav-in { max-width: var(--maxw); margin: 0 auto; padding: 14px 24px;
     display: flex; align-items: center; justify-content: space-between; }
-  .brand { font-family: var(--mono); font-weight: 700; font-size: 18px; letter-spacing: -0.5px; }
+  .brand { font-family: var(--mono); font-weight: 700; font-size: 18px; letter-spacing: -0.5px; display: inline-flex; align-items: center; gap: 9px; color: var(--fg); }
+  .brand img { display: block; }
   .brand .dot { color: var(--accent); }
   .nav-links { display: flex; gap: 28px; align-items: center; }
   .nav-links a { color: var(--fg-muted); font-size: 14px; transition: color .15s; }
@@ -236,11 +257,14 @@
   @media (prefers-reduced-motion: reduce){ .js .reveal{opacity:1;transform:none;transition:none} html{scroll-behavior:auto} }
 </style>
 </head>
-<body>
+<body id="top">
 
 <nav>
   <div class="nav-in">
-    <div class="brand">kenly<span class="dot">.</span></div>
+    <a class="brand" href="#top">
+      <img src="/assets/kenly-mark-transparent.svg" alt="kenly logo" width="26" height="26" />
+      <span>kenly<span class="dot">.</span></span>
+    </a>
     <div class="nav-links">
       <a href="#how">How it works</a>
       <a href="#modes">Modes</a>
@@ -464,7 +488,10 @@
 <footer>
   <div class="wrap">
     <div class="foot-in">
-      <div class="brand">kenly<span class="dot">.</span></div>
+      <div class="brand">
+        <img src="/assets/kenly-mark-transparent.svg" alt="kenly logo" width="24" height="24" />
+        <span>kenly<span class="dot">.</span></span>
+      </div>
       <div class="foot-links">
         <a href="https://pypi.org/project/kenly/" target="_blank">PyPI</a>
         <a href="https://cal.com/vishesh-paliwal/30min" target="_blank">Schedule a call</a>
